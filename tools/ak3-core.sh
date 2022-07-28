@@ -415,7 +415,7 @@ flash_boot() {
 
 # flash_generic <name>
 flash_generic() {
-  local avb avbblock file flags img imgblock isro path;
+  local avb avbblock file flags img imgblock isro path avbpath;
 
   cd $home;
   for file in $1 $1.img; do
@@ -446,10 +446,10 @@ flash_generic() {
         if [ "$flags" == "enabled" ]; then
           [ "$1" == "vendor_dlkm" -a "$avb" == "vbmeta" ] || abort "Unable to patch $1 on $avb. Aborting ...";
           ui_print " " "dm-verity detected! Patching vbmeta...";
-          for path in /dev/block/bootdevice/by-name /dev/block/mapper; do
+          for avbpath in /dev/block/bootdevice/by-name /dev/block/mapper; do
             for file in $avb $avb$slot; do
-              if [ -e $path/$file ]; then
-                avbblock=$path/$file;
+              if [ -e $avbpath/$file ]; then
+                avbblock=$avbpath/$file;
                 break 2;
               fi;
             done;
@@ -459,12 +459,18 @@ flash_generic() {
           cd $home;
         fi
       fi
-      $bin/lptools_static remove $1_ak3;
-      $bin/lptools_static create $1_ak3 $(wc -c < $img) || abort "Creating $1_ak3 failed. Aborting...";
-      $bin/lptools_static unmap $1_ak3 || abort "Unmapping $1_ak3 failed. Aborting...";
-      $bin/lptools_static map $1_ak3 || abort "Mapping $1_ak3 failed. Aborting...";
-      $bin/lptools_static replace $1_ak3 $1$slot || abort "Replacing $1$slot failed. Aborting...";
-      imgblock=/dev/block/mapper/$1_ak3;
+      if mount | grep /$1; then
+        if [ -e $path/$1-verity ]; then
+          $bin/busybox umount $($bin/busybox readlink -f $path/$1-verity) || abort "Unmounting $1-verity failed. Aborting...";
+          $bin/lptools_static unmap $1-verity || abort "Unmapping $1-verity failed. Aborting...";
+        else
+          $bin/busybox umount $($bin/busybox readlink -f $imgblock) || abort "Unmounting $1 failed. Aborting...";
+        fi
+      fi
+      $bin/lptools_static unmap $1$slot || abort "Unmapping $1$slot failed. Aborting...";
+      $bin/lptools_static resize $1$slot $(wc -c < $img) || abort "Resizing $1$slot failed. Aborting...";
+      $bin/lptools_static map $1$slot || abort "Mapping $1$slot failed. Aborting...";
+      mount -t ext4 -o ro,barrier=1 $($bin/busybox readlink -f $imgblock) /$1 # || abort "Mounting $1$slot failed. Aborting...";
     elif [ "$(wc -c < $img)" -gt "$(wc -c < $imgblock)" ]; then
       abort "New $1 image larger than $1 partition. Aborting...";
     fi;
