@@ -438,7 +438,7 @@ flash_generic() {
       abort "$1 partition could not be found. Aborting...";
     fi;
     if [ "$path" == "/dev/block/mapper" ]; then
-      avb=$($bin/httools_static avb $1);
+      avb=$($bin/httools_static avb);
       [ $? == 0 ] || abort "Failed to parse fstab entry for $1. Aborting...";
       if [ "$avb" ]; then
         flags=$($bin/httools_static disable-flags);
@@ -459,18 +459,13 @@ flash_generic() {
           cd $home;
         fi
       fi
-      if mount | grep /$1; then
-        if [ -e $path/$1-verity ]; then
-          $bin/busybox umount $($bin/busybox readlink -f $path/$1-verity) || abort "Unmounting $1-verity failed. Aborting...";
-          $bin/lptools_static unmap $1-verity || abort "Unmapping $1-verity failed. Aborting...";
-        else
-          $bin/busybox umount $($bin/busybox readlink -f $imgblock) || abort "Unmounting $1 failed. Aborting...";
-        fi
+      $bin/httools_static umount || abort "Unmounting $1 failed. Aborting...";
+      if [ -e $path/$1-verity ]; then
+        $bin/lptools_static unmap $1-verity || abort "Unmapping $1-verity failed. Aborting...";
       fi
       $bin/lptools_static unmap $1$slot || abort "Unmapping $1$slot failed. Aborting...";
       $bin/lptools_static resize $1$slot $(wc -c < $img) || abort "Resizing $1$slot failed. Aborting...";
       $bin/lptools_static map $1$slot || abort "Mapping $1$slot failed. Aborting...";
-      mount -t ext4 -o ro,barrier=1 $($bin/busybox readlink -f $imgblock) /$1 # || abort "Mounting $1$slot failed. Aborting...";
     elif [ "$(wc -c < $img)" -gt "$(wc -c < $imgblock)" ]; then
       abort "New $1 image larger than $1 partition. Aborting...";
     fi;
@@ -494,6 +489,9 @@ flash_generic() {
     if [ "$isro" != 0 ]; then
       blockdev --setro $imgblock 2>/dev/null;
     fi;
+    if [ "$path" == "/dev/block/mapper" ]; then
+      $bin/httools_static mount || abort "Mounting $1 failed. Aborting...";
+    fi
     touch ${1}_flashed;
   fi;
 }
