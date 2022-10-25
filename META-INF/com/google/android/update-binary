@@ -344,6 +344,13 @@ do_levelcheck() {
     abort " " "Unsupported Android security patch level. Aborting...";
   fi;
 }
+do_veritycheck() {
+  [ "$(file_getprop anykernel.sh supported.verity)" == 0 ] || return 1;
+  ui_print "Checking verity and verification...";
+  $AKHOME/tools/avbctl get-verity | $BB grep -q " disabled " || abort " " "Unsupported verity state. Aborting...";
+  $AKHOME/tools/avbctl get-verification | $BB grep -q " disabled " || abort " " "Unsupported verification state. Aborting...";
+  ui_print "disabled" " ";
+}
 dump_moduleinfo() {
 $BB cat <<EOF > $1;
 id=ak3-helper
@@ -481,6 +488,7 @@ setup_env;
 do_devicecheck;
 do_versioncheck;
 do_levelcheck;
+do_veritycheck;
 
 ui_print "Installing...";
 CORE=$($BB grep -oE 'ak.*core.sh' anykernel.sh);
